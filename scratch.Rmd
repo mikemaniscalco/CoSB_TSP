@@ -1,0 +1,199 @@
+---
+title: "multipage pdf with Geosyntec format"
+output: html_document
+date: "2022-09-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include = FALSE}
+#include = FALSE will hide everything in the code chunk, echo=FALSE will hide code but show plots, etc.
+ 
+################################################
+# Author: Summer Broeckx-Smith, Caroline Conrad, Michael Maniscalco
+# Date Created: September 14, 2022
+# Last modified: September 26, 2022
+################################################
+```
+
+## Multipage TSP plots generated on Geosyntec template
+
+```{r librarys, message=FALSE}
+library(tidyverse)
+library(magick)
+library(janitor)
+library(ggpubr)
+library(cowplot)
+library(gridExtra)
+library(here)
+library(grid)
+library(egg)
+# library(Kendall)
+library(kableExtra)
+library(tinytex)
+library(ggh4x) #THIS PACKAGE IS AWESOME - ggplot2 hacks!
+```
+
+### Set Variables
+
+```{r}
+figure_number <- "Figure XXX"
+figure_office <- "Santa Barbara"
+figure_date <- "December 2022"
+figure_site <- "BKK Landfill Test West Colvina, California" # can assign a line break with unicode rather than str_wrap
+figure_file_path <- "C:/Users/Michael.Maniscalco/OneDrive - Geosyntec/Documents"
+
+```
+
+### Create pallette
+
+```{r pallette}
+```
+
+### Set custom theme
+
+```{r theme}
+#### set theme
+theme_set(
+  # theme(
+  #   # text=element_text(family="Times"), 
+  #       panel.background = element_rect(fill='transparent'), #transparent panel bg
+  #       plot.background = element_rect(fill='transparent', color=NA), #transparent plot bg
+  #       plot.margin=unit(c(0,0,0,0), 'inches'),
+  #       panel.border = element_rect(colour = "black", fill=NA, size=1),
+  #       panel.grid.major = element_line(linetype = "blank"), 
+  #       panel.grid.minor = element_line(linetype = "blank"), 
+  #       plot.title = element_text(size=12),
+  #       axis.title = element_text(size = 12), 
+  #       axis.text = element_text(size = 10, colour = "black"), 
+  #       axis.line = element_line(colour = "black"), 
+  #       axis.ticks = element_line(size = 1), 
+  #       legend.title = element_blank(),
+  #       legend.text = element_text(size = 8),
+  #       legend.key = element_rect(fill = NA), 
+  #       legend.background = element_blank(),
+  #       legend.key.width =unit(0.15, units = "cm"),
+  #       legend.key.height =unit(0.15, units = "cm"),
+  #       axis.title.y = element_blank(),
+  #       axis.text.x = element_text(angle = 45, vjust = 0.85, hjust = 0.95),
+  #       legend.text.align= 0,
+  #       legend.position = "bottom", 
+  #       legend.justification = "left",
+  #       legend.direction = "vertical",)
+  theme(
+    text = element_text(family = "serif"),
+    legend.title = element_blank(),
+                      legend.justification = "bottom",
+                      legend.key.size = unit(0.5, "cm"),
+                      legend.spacing.y = unit(0.05, 'cm'),
+                      legend.text = element_text(face = "bold", size = 8),
+                      legend.box.margin=margin(0,0,0,30),
+                      axis.title.y = element_text(margin = margin(r=10), 
+                                                  face = "bold", 
+                                                  size = 12),
+                      axis.title.y.right = element_text(vjust=2),
+                      axis.text.y = element_text(face = "bold", 
+                                                 size = 9),
+                      axis.text.x = element_text(margin = margin(t=10),
+                                                 face = "bold", 
+                                                 size = 10),
+                      axis.ticks.x = element_line(),
+                      axis.ticks.length.x = unit(0.25,"cm"),
+                      ggh4x.axis.ticks.length.minor = rel(0.5),
+                      panel.grid.major.y = element_line(color = "gray70"),
+                      panel.border = element_rect(color = "grey5", 
+                                                  fill = NA),
+                      plot.margin = unit(c(0, 5.5, 0, 5.5), "pt"),
+                      plot.background = element_blank())
+  
+)
+
+```
+
+### Formatting functions for time series plot
+
+```{r format}
+#Outsourced script to make axis auto-breaks for log scale
+prettyLogs <- function(x){
+                          pretty_range <- range(x[x > 0])
+                          pretty_logs <- 10^(-10:10)
+                          log_index <- which(pretty_logs < pretty_range[2] &
+                                               pretty_logs > pretty_range[1])
+                          log_index <- c(log_index[1]-1,log_index, log_index[length(log_index)]+1)
+                          pretty_logs_new <-  pretty_logs[log_index]
+                          return(pretty_logs_new)
+                         }
+
+#Outsourced script to format 10^x for log scale
+fancyNumbers <- function(n){
+                            nNoNA <- n[!is.na(n)]
+                            x <-gsub(pattern = "1e",replacement = "10^",
+                                     x = format(nNoNA, scientific = TRUE))
+                            exponents <- as.numeric(sapply(strsplit(x, "\\^"), function(j) j[2]))
+                            
+                            base <- "10^"
+                            exponents[base == "1" | base == "10"] <- ""
+                            textNums <- rep(NA, length(n))
+                            textNums[!is.na(n)] <- paste0(base,exponents)
+                            
+                            textReturn <- parse(text=textNums)
+                            return(textReturn)
+                          }
+```
+
+### Make Plot
+
+```{r pressure, echo=FALSE}
+# Make a simple plot and save it
+p <- ggplot(mpg, aes(displ, hwy, colour = class)) + 
+  geom_point() + 
+  ggtitle("Cars") 
+p
+```
+
+### Load template image file and convert to ggplot object
+
+```{r}
+logo_file <- image_read("C:/Users/Michael.Maniscalco/OneDrive - Geosyntec/Documents/CoSB_excel_revamp/CoSB_FigureTemplate_Test.svg")
+image_gg <- ggdraw()+
+  draw_image(logo_file, scale = 1)
+
+image_gg
+```
+
+### Combine template, plot, and text annotations
+
+```{r add players and create final plot}
+
+plot_inset <- ggdraw()+
+  draw_plot(image_gg) +
+  annotate("text", x=.65, y=.215, label = stringr::str_wrap(figure_site, 25), size= 4, color ="red", hjust = 0) +
+  annotate("text", x=.89, y=.175, label = stringr::str_wrap(figure_number, 6), size= 4, color ="red", hjust = 0,  vjust = 1)+
+  annotate("text", x=.765, y=.0855, label = figure_date, size= 3, color ="red", hjust = 0) +
+  annotate("text", x=.62, y=.0855, label = figure_office, size= 3, color ="red", hjust = 0) +
+  annotate("text", x=0.0475, y=0.085, label = figure_file_path, size= 1.5, color ="red",angle=90, hjust = 0) +
+  draw_plot(p, x = 0.075, y = 0.15, width = 0.85, height = 0.7)
+
+plot_inset
+
+# # this might be helpful (or a gggrid step) when facetting the groundwater with the regular plots
+# ppl <- list(p1 = arrangeGrob(grobs=pl[1:4]),
+#             p2 = arrangeGrob(grobs=pl[5:6]),
+#             p3 = arrangeGrob(grobs=pl[7]))
+```
+
+### Save plot
+
+```{r ggsave}
+ggsave(filename = "CoSB_tsp_ggplot_concept.pdf", 
+       plot = plot_inset,
+       width = 11, 
+       height = 8.5,
+       dpi = 300,
+       device = "pdf"
+      )
+# ggsave(filename = paste0(here("/"), last_plot()$labels$title, ".png"),
+#          width = 5, height = 4, dpi = 300)
+```

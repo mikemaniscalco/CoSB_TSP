@@ -1,0 +1,558 @@
+---
+title: 
+subtitle: 
+output:
+  pdf_document: default
+  word_document: default
+  html_document:
+    df_print: paged
+fontsize: 9pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include = FALSE}
+#include = FALSE will hide everything in the code chunk, echo=FALSE will hide code but show plots, etc.
+ 
+################################################
+# Author: Summer Broeckx-Smith, Caroline Con
+# Date Created: July 23, 2021
+# Last modified: December 27, 2021
+# Recent updates: Sort by date, change cov cal, update trend logic
+################################################
+# 0. Column headers required
+################################################
+
+#ANALYTE TABLE
+# Location_	 
+# Sample_Date	
+# Analyte	
+# ValidationResult_	
+# is_detected	
+# Detect	
+
+#LOCATION TABLE
+# Aquifer
+# Location_
+# TopOfScrn
+# BotOfScrn
+# TopScrnElev
+# BotScrnElev
+
+################################################
+# 1. Load packages & data
+################################################
+
+library(tidyverse)
+library(egg)
+library(Kendall)
+library(base)
+library(knitr)
+library(kableExtra)
+library(tinytex)
+library(ggh4x) #THIS PACKAGE IS AWESOME - ggplot2 hacks!
+
+TSP_data = read_csv('qrySSBS_RECAP_TSP_02_EXPORT_R_LAR.csv') #Plot data
+
+TSP_data$Sample_Date <- as.Date(TSP_data$Sample_Date, format = "%m/%d/%Y") #Convert to R dates
+
+TSP_Loc = read_csv('qrySSBS_RECAP_TSP_03_LocationTbl_R_LAR_MW.csv') #Unique locations for indexing
+
+df_all_results <- data.frame(matrix(NA, ncol = 4))
+colnames(df_all_results) <- c("Location","Analyte","N","conc_trend")
+
+################################################
+# 2. Formatting functions for time series plot
+################################################
+
+#Outsourced script to make axis auto-breaks for log scale
+prettyLogs <- function(x){
+                          pretty_range <- range(x[x > 0])
+                          pretty_logs <- 10^(-10:10)
+                          log_index <- which(pretty_logs < pretty_range[2] &
+                                               pretty_logs > pretty_range[1])
+                          log_index <- c(log_index[1]-1,log_index, log_index[length(log_index)]+1)
+                          pretty_logs_new <-  pretty_logs[log_index]
+                          return(pretty_logs_new)
+                         }
+
+#Outsourced script to format 10^x for log scale
+fancyNumbers <- function(n){
+                            nNoNA <- n[!is.na(n)]
+                            x <-gsub(pattern = "1e",replacement = "10^",
+                                     x = format(nNoNA, scientific = TRUE))
+                            exponents <- as.numeric(sapply(strsplit(x, "\\^"), function(j) j[2]))
+                            
+                            base <- "10^"
+                            exponents[base == "1" | base == "10"] <- ""
+                            textNums <- rep(NA, length(n))
+                            textNums[!is.na(n)] <- paste0(base,exponents)
+                            
+                            textReturn <- parse(text=textNums)
+                            return(textReturn)
+                          }
+
+#Outsourced function from Hadley Wickham to suppress MannKendall warnings - don't ask me how it works...
+quiet <- function(x) { 
+                      sink(tempfile()) 
+                      on.exit(sink()) 
+                      invisible(force(x)) 
+                      }
+
+################################################
+# 3. Prep for MK analysis
+################################################
+
+well_list = unique(TSP_Loc$Location_) #Extracts different well locations, vector needed for loop indexing
+well_list_df = as.data.frame(well_list) #Stores as data frame for pulling well name in loop
+run = length(well_list)
+
+screen_table = data.frame(matrix(NA, nrow = 2, ncol = 3)) #Create empty data frame 
+screen_table = screen_table %>%
+                    rename("Top Screen" = X2,
+                           "Bottom Screen" = X3)
+screen_table[1,1] = "Screen Depth (ft-bgs)"
+screen_table[2,1] = "Screen Elevation (ft-msl)"                    
+
+```
+
+```{r, echo=FALSE, warning = FALSE, message = FALSE, results = 'asis', fig.align= "center", fig.width = 7, fig.height = 5}
+
+################################################
+# 4. Loop for well-specific pages
+################################################
+
+###Well-Specific Counts and Information##  CHANGE ANALYTES HERE
+#########################################
+
+for(i in 1:run){
+#for(i in c(58,70,154,260,280,282,283)){    #select biosparge wells only
+     #  i = 85
+   
+  loop_data = subset(TSP_data, Location_ == well_list_df[i,1]) #Subsets well data for table
+  well_info = subset(TSP_Loc, Location_ == well_list_df[i,1]) #Subsets location data for table
+  analytical_subset = loop_data %>% filter(Analyte %in% c("Benzene", "TBA", "DIPE", "MTBE"))
+                                                          #, "TPH-g", "TPH-d"))
+  #sort analytical data
+  analytical_subset <- analytical_subset %>% arrange(Analyte,Sample_Date)
+  
+  names(screen_table)[1] <- paste0("Aquifer: ", well_info$Aquifer) #Dynamic col header
+  screen_table[1,2] = well_info$TopOfScrn
+  screen_table[1,3] = well_info$BotOfScrn
+  screen_table[2,2] = well_info$TopScrnElev
+  screen_table[2,3] = well_info$BotScrnElev
+  
+  myFreqs <- analytical_subset %>% 
+    group_by(Analyte) %>% 
+    summarise(Freq = n()) 
+
+################################################
+# 4a. Make time series plot
+################################################
+
+date_x_min = min(loop_data$Sample_Date) #Min date for axis
+date_x_max = max(loop_data$Sample_Date) #Max date for axis
+hydro_y_max = if(max(loop_data$ValidationResult_[loop_data$Analyte == "LNAPL"], na.rm = TRUE) >
+                 max(loop_data$ValidationResult_[loop_data$Analyte == "Groundwater Level"], na.rm = TRUE)){
+              max(loop_data$ValidationResult_[loop_data$Analyte == "LNAPL"], na.rm = TRUE)
+              }else {
+              max(loop_data$ValidationResult_[loop_data$Analyte == "Groundwater Level"], na.rm = TRUE)  
+              }
+hydro_y_max[!is.finite(hydro_y_max)] = 0
+  
+hydro_y_min = min(loop_data$ValidationResult_[loop_data$Analyte == "Groundwater Level"], na.rm = TRUE)
+hydro_y_min[!is.finite(hydro_y_min)] = 0
+
+plot_top_screen <- tryCatch(if (well_info$TopScrnElev > hydro_y_min & well_info$TopScrnElev < hydro_y_max){
+                        well_info$TopScrnElev 
+                         } else {
+                            hydro_y_max
+                         },
+                        error = function(e) hydro_y_max)
+
+plot_bot_screen <- tryCatch(if (well_info$BotScrnElev > hydro_y_min & well_info$BotScrnElev < hydro_y_max){
+                        well_info$BotScrnElev 
+                         } else {
+                            hydro_y_min
+                          },
+                        error = function(e) hydro_y_min)
+
+top_in_range <- tryCatch(if (well_info$TopScrnElev > hydro_y_min & well_info$TopScrnElev < hydro_y_max){
+                        1 
+                         } else {
+                        0
+                         },
+                        error = function(e) 0)
+
+bot_in_range <- tryCatch(if (well_info$BotScrnElev > hydro_y_min & well_info$BotScrnElev < hydro_y_max){
+                        1
+                         } else {
+                        0
+                          },
+                        error = function(e) 0)
+
+
+screen_detect = tryCatch(if(well_info$BotScrnElev < hydro_y_min & well_info$TopScrnElev > hydro_y_max){
+                1
+                }else if(top_in_range + bot_in_range > 0){
+                  1
+                } else{
+                  0
+                },
+                error = function(e) 0)
+
+detections = if(sum(analytical_subset$is_detected) > 0){
+              c(15,1)
+               } else{
+                  1
+              }
+
+hydro_colors = if(bot_in_range > 0){
+                c("indianred4","grey3","red2","dodgerblue4")
+                } else {
+                c("grey3","red2","dodgerblue4")
+                }
+              
+
+bottom_plot <- ggplot(data = analytical_subset) +
+                geom_point(aes(x=Sample_Date, y=ValidationResult_, color = Analyte, shape = Detect),
+                           size = 2) +
+                scale_shape_manual(values=detections)+
+                geom_line(aes(x=Sample_Date, y=ValidationResult_, group = Analyte, color = Analyte),
+                          size = 0.85) +
+                xlab(element_blank()) +
+                ylab("Analyte Concentration (µg/l)") +
+                # scale_x_date(date_labels = "%b %Y",
+                #             limits = c(date_x_min,date_x_max)) +
+                scale_x_date(date_labels = "%b %Y",
+                            limits = c(date_x_min,date_x_max),
+                            date_minor_breaks = "1 year",
+                            guide = "axis_minor") +
+                scale_y_log10(labels = fancyNumbers,
+                              breaks = prettyLogs)+
+                theme_classic() +
+                theme(text = element_text(family = "serif"),
+                      legend.title = element_blank(),
+                      legend.justification = "bottom",
+                      legend.key.size = unit(0.5, "cm"),
+                      legend.spacing.y = unit(0.05, 'cm'),
+                      legend.text = element_text(face = "bold", size = 8),
+                      legend.box.margin=margin(0,0,0,30),
+                      axis.title.y = element_text(margin = margin(r=10), 
+                                                  face = "bold", 
+                                                  size = 12),
+                      axis.title.y.right = element_text(vjust=2),
+                      axis.text.y = element_text(face = "bold", 
+                                                 size = 9),
+                      axis.text.x = element_text(margin = margin(t=10),
+                                                 face = "bold", 
+                                                 size = 10),
+                      axis.ticks.x = element_line(),
+                      axis.ticks.length.x = unit(0.25,"cm"),
+                      ggh4x.axis.ticks.length.minor = rel(0.5),
+                      panel.grid.major.y = element_line(color = "gray70"),
+                      panel.border = element_rect(color = "grey5", 
+                                                  fill = NA),
+                      plot.margin = unit(c(0, 5.5, 0, 5.5), "pt"),
+                      plot.background = element_blank()) +
+                       scale_fill_brewer(palette = "Spectral")
+
+bottom_plot_NA = bottom_plot + labs(title = well_list_df[i,1]) +  
+                                 theme(text = element_text(family = "serif"),
+                                       plot.title = element_text(hjust=0.5, 
+                                                                 face = "bold", 
+                                                                 size = 16, 
+                                                                 margin = margin(b =10)))
+
+
+top_plot <- ggplot(loop_data %>% filter(Analyte %in% c("LNAPL", "Groundwater Level"))) 
+
+if(screen_detect == 1){
+  top_plot <- top_plot + geom_ribbon(aes(ymin = plot_bot_screen, 
+                                         ymax = plot_top_screen,
+                                         x = Sample_Date, fill = "Screen Interval"),
+                                         alpha = 0.5) 
+}
+
+if(plot_top_screen != hydro_y_max){
+  top_plot <- top_plot + geom_hline(aes(yintercept = plot_top_screen,
+                                    color = "Top of Screen"),
+                                    size = 0.5) 
+}
+
+if(plot_bot_screen != hydro_y_min){
+  top_plot <- top_plot + geom_hline(aes(yintercept = plot_bot_screen, 
+                                    color = "Bottom of Screen"),
+                                    size = 0.5) 
+}
+
+
+top_plot <- top_plot +  geom_line(data = loop_data %>% 
+                                    filter(Analyte == "LNAPL"),
+                      aes(x=Sample_Date,y=ValidationResult_, group = Analyte, color = Analyte),
+                      size = 0.85) +
+            geom_line(data = loop_data %>% 
+                        filter(Analyte == "Groundwater Level"),
+                      aes(x=Sample_Date,y=ValidationResult_, group = Analyte, color = Analyte),
+                      size = 0.85) +
+            geom_point(data = loop_data %>% 
+                         filter(Analyte == "Groundwater Level"),
+                      aes(x=Sample_Date, y=ValidationResult_, color = Analyte, shape = Detect),
+                      size = 2) +
+           scale_shape_manual(values=c(15, 1), guide = FALSE)+ 
+           geom_point(data = loop_data %>% 
+                        filter(Analyte == "LNAPL") %>% 
+                        filter(is_detected == 1),
+                       aes(x=Sample_Date, y=ValidationResult_),
+                       size = 2, 
+                       colour = "red2") +
+            xlab(element_blank()) +
+            ylab(element_blank()) +
+            scale_x_date(date_labels = "%b %Y",
+                         limits = c(date_x_min,date_x_max)) +
+            scale_y_continuous(sec.axis = sec_axis(~., name = "Elevation (ft-msl)")) +
+            labs(title = well_list_df[i,1]) +
+            theme_classic() +
+            theme(text = element_text(family = "serif"),
+                  plot.title = element_text(hjust=0.5, 
+                                            face = "bold", 
+                                            size = 16, 
+                                            margin = margin(b =10)),
+                  legend.title = element_blank(),
+                  legend.justification = "top",
+                  legend.key.size = unit(0.5, "cm"),
+                  legend.text = element_text(face = "bold", size = 8),
+                  axis.title.y = element_text(margin = margin(l=10), 
+                                              face = "bold", 
+                                              size = 12),
+                  axis.title.y.right = element_text(vjust=2),
+                  axis.text.y = element_blank(),
+                  axis.text.y.right = element_text(size = 9),
+                  axis.text.x = element_blank(),
+                  axis.ticks.x = element_blank(),
+                  axis.title.x = element_blank(),
+                  axis.title.x.bottom = element_blank(),
+                  panel.grid.major.y = element_line(color = "gray70"),
+                  panel.border = element_rect(color = "grey5", 
+                                              fill = NA),
+                  plot.margin = unit(c(5.5, 5.5, 0, 5.5), "pt"),
+                  plot.background = element_blank()) +
+                  scale_fill_manual("",values ="grey85") +
+                  scale_color_manual(values = hydro_colors)
+
+
+
+
+  
+################################################
+# 4b. MK Analysis
+################################################  
+#options(warn = -1)
+
+MK_table <- data.frame(matrix(NA, nrow = length(myFreqs$Analyte), ncol = 3)) #Create dynamic empty data frame for MK table
+
+MK_table = MK_table %>% ##Assign column names##
+              rename(Analyte = X1,
+                     N = X2,
+                     conc_trend = X3)
+
+MK_table$Analyte = myFreqs$Analyte #Fill in available analytes
+  
+#MK_loop_data = loop_data %>% filter(Analyte %in% c("Benzene", "TBA", "DIPE", "MTBE", "TPH-g", "TPH-d"))
+
+TSP_well_analyte = split(analytical_subset$ValidationResult_, analytical_subset$Analyte) #Creates groups of data based on analyte for MK analysis
+
+TSP_well_analyte_short = TSP_well_analyte[lengths(TSP_well_analyte)>=4] #Remove less than 4 for MK analysis
+
+mk_results = quiet(lapply(TSP_well_analyte_short, function(y) unlist(MannKendall(y))))
+
+mk_df = as.data.frame(mk_results) #Saves as a data frame for calling in stats
+
+if(length(mk_df)>0){
+colnames(mk_df) = names(TSP_well_analyte_short) #Corrects well name format
+}
+
+
+################################################
+# 4c. Isolate results by analyte and calculate trend direction
+################################################ 
+
+is_mk_data = length(myFreqs$Analyte)
+
+if (is_mk_data > 0){
+
+for(j in 1:length(myFreqs$Analyte)){
+  analyte_select = myFreqs$Analyte[j]
+  
+  loop_mk = tryCatch(subset(mk_df, select = analyte_select),
+  error = function(e) NA)
+  
+  analyte_data = subset(loop_data, Analyte == analyte_select)
+  count_detect = sum(analyte_data$is_detected)
+  
+  detects_data = if(count_detect >0) {
+    subset(analyte_data, is_detected == 1)
+  } else {
+      NA
+    }
+  
+  detect_mean <- tryCatch(mean(detects_data$ValidationResult_),error = function(e) NA)
+  detect_median = tryCatch(median(detects_data$ValidationResult_),error = function(e) NA)
+  detect_max = tryCatch(max(detects_data$ValidationResult_),error = function(e) NA)
+
+  analyte_mean = tryCatch(mean(analyte_data$ValidationResult_),error = function(e) NA)          
+  analyte_sd = tryCatch(sd(analyte_data$ValidationResult_),error = function(e) 0)
+  analyte_cov = tryCatch(analyte_sd/analyte_mean,  error = function(e) NA)
+  
+  analyte_cf = tryCatch(if(loop_mk[2,1] < 0.001){
+    ">99.9"
+  } else {
+    round((1 - loop_mk[2,1])*100, digits = 1)
+  },
+  error = function(e) NA)
+  
+  pval = tryCatch(loop_mk[2,1]/2, error = function(e) NA)
+  
+   # This new logic is mostly copied from ESTAT's custom MK approach, with some of my own tweaks (noted) for consistent results
+  analyte_trend <- tryCatch(if(count_detect > 0){
+  if(loop_mk[3,1] > 0){
+    if(pval > 0.10){
+        "No Trend" # This step is my own adjustment
+    } else if(pval >= 0.05 & pval <= 0.10){
+      "Probably Increasing"
+    } else {
+      "Increasing"
+    }
+  } else if(loop_mk[3,1] < 0){
+    if(pval > 0.10){
+      if(analyte_cov < 1){
+        "Stable"
+      } else {
+        "No Trend"
+      }
+    } else if(pval >= 0.05 & pval <= 0.10){
+      "Probably Decreasing"
+    } else {
+      "Decreasing"
+    }
+  } else if(pval >0.10 & loop_mk[3,1]<=0){
+    if(analyte_cov < 1){
+      "Stable"
+    } else {
+      "No Trend"
+    }
+  } else {
+    "No Trend"
+  }
+} else if(count_detect == 0 & !is.na(loop_mk[3,1])){
+  "Stable"
+} else {
+  "Not enough data"
+}, error = function(e) "Not enough data")
+  
+  
+  
+  # 
+  # if(count_detect < 2 & nrow(analyte_data) >3){
+  #   analyte_trend = "Stable"
+  # } else {
+  # 
+  # analyte_trend = tryCatch(if(pval < 0.05 & loop_mk[3,1]>0){
+  #     "Increasing"
+  #             } else
+  #             if(pval < 0.05 & loop_mk[3,1]<0){
+  #     "Decreasing"
+  #             } else
+  #             if(pval < 0.10 & loop_mk[3,1]>0){
+  #     "Probably Increasing"
+  #             } else
+  #             if(pval < 0.10 & loop_mk[3,1]<0){
+  #     "Probably Decreasing"
+  #             } else
+  #             if(pval > 0.10 & loop_mk[3,1]>0){
+  #     "No Trend"
+  #             } else
+  #             if(pval > 0.10 & loop_mk[3,1]<0 & analyte_cov >1){
+  #      "No Trend"
+  #             } else{
+  #       "Stable"
+  #             },
+  #       error = function(e) "Not enough data") }
+
+MK_table[j,2] =  myFreqs[j,2]  
+MK_table[j,3] = analyte_trend  
+
+}
+}
+
+  
+
+###############################################
+# Print well-specific info to PDF##
+###############################################
+ 
+  summary_cols =c("Analyte","N", "Concentration Trend")
+
+  summary_table = kable(MK_table,  #Print subset as table
+                        format = "latex",
+                        booktabs = T,
+                        linesep = "",
+                        digits = 2,
+                        col.names = summary_cols,
+                        align = "lcc")
+ 
+
+    info_table =   kable(screen_table,
+                         format = "latex",
+                         booktabs = T,
+                         linesep = "",
+                         digits = 2,
+                         align = "lcc") 
+  
+  tryCatch(if(nrow(top_plot$data) > 0 )  {
+      ggarrange(top_plot,bottom_plot, ncol=1, heights = c(1.5,3))     
+  }else{
+
+print(bottom_plot_NA)
+  },
+error = function(e) print(bottom_plot_NA))
+  
+
+  if (is_mk_data >0){
+
+  cat(c("\\begin{table}[ht]",
+        "\\vspace{0.5cm}",
+          info_table %>% row_spec(0,bold=TRUE) 
+                     %>% column_spec(1,width = "7.3em") 
+                     %>% column_spec(2:3, width = "5em"),
+        "\\hspace{0.75cm}",
+        summary_table %>% row_spec(0,bold=TRUE),
+        "\\end{table}"))
+  } else {
+    print(info_table %>% row_spec(0,bold=TRUE))
+  }
+  
+#####################################
+# Capture results to data frame
+#####################################
+
+if (is_mk_data >0)
+  {  
+   result_table <-MK_table %>% add_column(Location = NA, .before= "Analyte")
+   result_table$Location = well_info$Location_
+   df_all_results <-rbind(df_all_results,result_table)
+  }
+    
+  cat("\n\n\\newpage\n")
+   
+}
+
+write_csv(df_all_results,"Shell_LAR_Mann-Kendall_Markdown_Analytical_MAIN_RESULTS.csv")
+
+########################################################
+# END SCRIPT
+########################################################
+
+```
