@@ -1,0 +1,260 @@
+---
+title: "multipage pdf with Geosyntec format"
+output: html_document
+date: "2022-09-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(dpi=300)
+
+```
+
+## Multipage TSP plots generated on Geosyntec template
+
+### Next steps
+1) Make ggplot with dialed in formatting
+2) Pull table from queries with any filtering steps that are needed
+3) Other stuff /ideas
+  * prevent plot size from changing when legend size changes
+  * Version that will facet with GW plots (maybe an ifelse to choose between GW and non-GW)
+  * move variable assignment to top for ease of use/changing
+  * add "in_filename" and "out_filename" as variables
+ 
+
+```{r, include = FALSE}
+#include = FALSE will hide everything in the code chunk, echo=FALSE will hide code but show plots, etc.
+ 
+################################################
+# Author: Summer Broeckx-Smith, Caroline Conrad, Michael Maniscalco
+# Date Created: September 14, 2022
+# Last modified: September 26, 2022
+################################################
+```
+
+
+### Load libraries
+* I think some of these packages aren't being used in this code anymore
+
+```{r libraries, message=FALSE}
+library(tidyverse)
+library(magick)
+library(janitor)
+library(ggpubr)
+library(cowplot)
+library(gridExtra)
+library(here)
+library(grid)
+library(readxl)
+library(ggtext)
+library(egg)
+# library(Kendall)
+library(kableExtra)
+# library(tinytex)
+library(ggh4x) #THIS PACKAGE IS AWESOME - ggplot2 hacks!
+```
+
+
+### Set Variables
+
+```{r}
+figure_number <- "Figure XXX"
+figure_office <- "Santa Barbara"
+figure_date <- "December 2022"
+figure_site <- "BKK Landfill Test West Colvina, California" # can assign a line break with unicode rather than str_wrap
+figure_file_path <- "C:/Users/Michael.Maniscalco/OneDrive - Geosyntec/Documents"
+
+```
+
+### Load data
+
+```{r data}
+df_no_dupes <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy Input Data/qryHLE_Basic_Data_Query_No_Dups_06a_Final_with_Min_RL_NDs_CoSB_DummyInputs.xlsx") %>%
+    mutate(`Date Sampled`=as.Date(`Date Sampled`),
+           SigFigResult= as.numeric(gsub(",","",SigFigResult)),
+           Detect=factor(Detect,
+                         levels = c(0, 1),
+                         labels = c("Non-detect", "Detect"))
+           ) 
+
+attributes(df_no_dupes$Detect)
+df_GWLs <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy Input Data/tblJDW_Groundwater_GW_Levels_CoSB_DummyInputs.xlsx")
+```
+
+### Create pallette
+
+```{r pallette}
+```
+
+### Formatting functions for time series plot
+
+```{r format}
+#Outsourced script to make axis auto-breaks for log scale
+prettyLogs <- function(x){
+                          pretty_range <- range(x[x > 0])
+                          pretty_logs <- 10^(-10:10)
+                          log_index <- which(pretty_logs < pretty_range[2] &
+                                               pretty_logs > pretty_range[1])
+                          log_index <- c(log_index[1]-1,log_index, log_index[length(log_index)]+1)
+                          pretty_logs_new <-  pretty_logs[log_index]
+                          return(pretty_logs_new)
+                         }
+
+#Outsourced script to format 10^x for log scale
+fancyNumbers <- function(n){
+                            nNoNA <- n[!is.na(n)]
+                            x <-gsub(pattern = "1e",replacement = "10^",
+                                     x = format(nNoNA, scientific = TRUE))
+                            exponents <- as.numeric(sapply(strsplit(x, "\\^"), function(j) j[2]))
+                            
+                            base <- "10^"
+                            exponents[base == "1" | base == "10"] <- ""
+                            textNums <- rep(NA, length(n))
+                            textNums[!is.na(n)] <- paste0(base,exponents)
+                            
+                            textReturn <- parse(text=textNums)
+                            return(textReturn)
+                          }
+```
+
+### Set custom theme
+
+```{r theme}
+#### set theme
+  #   # text=element_text(family="Times"), 
+  #       panel.background = element_rect(fill='transparent'), #transparent panel bg
+  #       plot.background = element_rect(fill='transparent', color=NA), #transparent plot bg
+  #       plot.margin=unit(c(0,0,0,0), 'inches'),
+  #       panel.border = element_rect(colour = "black", fill=NA, size=1),
+  #       panel.grid.major = element_line(linetype = "blank"), 
+  #       panel.grid.minor = element_line(linetype = "blank"), 
+  #       plot.title = element_text(size=12),
+  #       axis.title = element_text(size = 12), 
+  #       axis.text = element_text(size = 10, colour = "black"), 
+  #       axis.line = element_line(colour = "black"), 
+  #       axis.ticks = element_line(size = 1), 
+  #       legend.title = element_blank(),
+  #       legend.text = element_text(size = 8),
+  #       legend.key = element_rect(fill = NA), 
+  #       legend.background = element_blank(),
+  #       legend.key.width =unit(0.15, units = "cm"),
+  #       legend.key.height =unit(0.15, units = "cm"),
+  #       axis.title.y = element_blank(),
+  #       axis.text.x = element_text(angle = 45, vjust = 0.85, hjust = 0.95),
+  #       legend.text.align= 0,
+  #       legend.position = "bottom", 
+  #       legend.justification = "left",
+  #       legend.direction = "vertical",)
+theme_set(
+  theme(
+    panel.background = element_rect(fill='transparent'), #transparent panel bg
+    plot.background = element_rect(fill='transparent', color=NA), #transparent plot bg
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    panel.grid.major = element_line(linetype = "blank"), 
+    panel.grid.minor = element_line(linetype = "blank"), 
+# panel.grid.major.y = element_line(color = "gray70"),
+# panel.border = element_rect(color = "grey5", fill = NA),
+    plot.margin = unit(c(0.1, 5.5, 0.1, 5.5), "pt"),
+    axis.title.y = element_text(margin = margin(r=10), face = "bold", size = 12, angle = 90),
+    axis.title.y.right = element_text(vjust=2),
+    axis.text.y = element_text(face = "bold",  size = 9),
+    axis.text.x = element_text(margin = margin(t=10), face = "bold",  size = 10),
+    axis.ticks.x = element_line(),
+    axis.ticks.length.x = unit(0.25,"cm"),
+    text = element_text(family = "serif"),
+    legend.title = element_blank(),
+    legend.justification = "bottom",
+                      legend.key.size = unit(0.5, "cm"),
+                      legend.spacing.y = unit(0.05, 'cm'),
+                      legend.text = element_text(face = "bold", size = 8),
+                      # legend.box.margin=margin(0,0,0,30),
+                        ggh4x.axis.ticks.length.minor = rel(0.5)
+)
+)
+
+```
+
+### Make an example of a plot
+
+```{r sample_plot}
+df_noDup_list <-df_no_dupes %>%
+  split( df_no_dupes , f = df_no_dupes$Analyte)
+
+plots <- df_noDup_list %>%
+  map(~ggplot(data=.x, aes(x=`Date Sampled`, y=SigFigResult, group=Loc)) +
+        scale_y_continuous(trans = 'log10',breaks = prettyLogs)+
+        annotation_logticks(sides = "l",scaled = T, long=unit(5,"mm"))+
+        scale_shape_manual(values=c(1,19))+
+        ylab(expression("Concentration ("*mu*"g/l)"))+
+        scale_x_date(date_labels =  "%b %Y",
+                     breaks=seq(as.Date("1988-01-01"), as.Date(max(df_no_dupes$`Date Sampled`)), by="12 months")) +
+        geom_line(aes(color=Loc, linetype=Loc),
+                  size=0.75)+
+        geom_point(aes(color=Loc, shape = Detect
+                        ), size=3, alpha = 0.5))
+plots$`1,1,1,2-Tetrachloroethane`
+```
+
+### Load template image file and convert to ggplot object
+
+```{r template}
+logo_file <- image_read("tsp_geosyntec_template.png")
+image_gg <- ggdraw()+
+  draw_image(logo_file, scale = 1)
+logo_file
+```
+
+### Combine template, plot, and text annotations
+
+```{r add plot layers and create final plot}
+date_x_min = min(df_no_dupes$`Date Sampled`) #Min date for axis
+date_x_max = max(df_no_dupes$`Date Sampled`) #Max date for axis
+
+str(df_no_dupes)
+       # scale_x_date(date_labels =  "%b %Y",
+        #              breaks=seq(as.Date("1988-01-01"), as.Date(max(df_no_dupes$`Date Sampled`)), by="12 months")) +
+
+plots_list <- df_no_dupes %>%
+  groupsplit(., f = Analyte) %>%
+  imap(.x=df_noDup_list, .f = ~(ggdraw()+
+  draw_plot(image_gg) +
+  annotate("text", x=.65, y=.225, label = figure_site, size= 3, color ="black", hjust = 0) +
+  annotate("text", x=.65, y=.205, label = paste("Time-Series Plot for ", unique(.x$Analyte)),  size= 3, color ="black", hjust = 0,
+           fontface = "bold") +
+  annotate("text", x=.89, y=.175, label = stringr::str_wrap(figure_number, 6), size= 4, color ="black", hjust = 0,  vjust = 1)+
+  annotate("text", x=.765, y=.0855, label = figure_date, size= 3, color ="black", hjust = 0) +
+  annotate("text", x=.62, y=.0855, label = figure_office, size= 3, color ="black", hjust = 0) +
+  annotate("text", x=0.0475, y=0.085, label = figure_file_path, size= 1.5, color ="black",angle=90, hjust = 0) +
+    draw_plot(ggplot(data=.x, aes(x=`Date Sampled`, y=SigFigResult, group=Loc)) +
+                ylab(expression("Concentration ("*mu*"g/l)"))+
+                scale_y_continuous(trans = 'log10',breaks = prettyLogs)+
+                annotation_logticks(sides = "l",scaled = T, long=unit(5,"mm"),)+
+                scale_x_date(date_labels = "%b %Y",
+                             limits = c(date_x_min,date_x_max),
+                             date_minor_breaks = "1 year",
+                             guide = "axis_minor") +
+                geom_line(aes(color=Loc,linetype=Loc),
+                          size=0.75)+
+                geom_point(aes(color=Loc, shape= Detect),
+                           size=3, alpha = 0.5)+
+                scale_shape_manual(values=c(1,16)),
+              x = 0.075, y = 0.15, width = 0.85, height = 0.7)))
+
+# Print one plot for us
+plots_list$`1,1-dichloro-1-Propene`
+
+
+```
+
+### Save plots in single pdf file
+
+```{r ggsave}
+# the next line is to only print a small subset of the plots during testing phase
+template_plots_30 <- plots_list[2:5]
+
+pdf("all.pdf",width = 11, 
+       height = 8.5)
+invisible(lapply(template_plots_30, print))
+dev.off()
+getwd()
+```
