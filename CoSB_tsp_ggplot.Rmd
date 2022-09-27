@@ -61,9 +61,13 @@ library(ggh4x) #THIS PACKAGE IS AWESOME - ggplot2 hacks!
 
 ```{r}
 # Sets static variables specific to a round of TSP plots
+Site_variable <- "Foxen Canyon Closed Landfill"
 figure_office <- "Santa Barbara"
 figure_date <- "December 2022"
 figure_file_path <- "C:/Users/Michael.Maniscalco/OneDrive - Geosyntec/Documents"
+database_path <- "P:/GIS/County of Santa Barbara RRWMD/Database/Plots/Graph_AllSites_County_of_SB.accdb"
+start_date <-"2005-01-01"
+start_date <- as.Date(start_date)
 ```
 
 ### Load qryTSPPlotList 
@@ -89,7 +93,7 @@ connect_to_access_dbi <- function(db_file_path)  {
 }
 
 # Saves database connection as as an object
-con <- connect_to_access_dbi("P:/GIS/County of Santa Barbara RRWMD/Database/Plots/Graph_AllSites_County_of_SB.accdb")
+con <- connect_to_access_dbi(database_path)
 
 # Looks for the query [or table] name in database, converts it to a datafrane and saves it as an object
 # Tbl can also be used to run tidyverse commands and translate it into SQL
@@ -107,6 +111,7 @@ rm(con, connect_to_access_dbi)
 ### Load data
 
 ```{r data}
+# This could probably be bumped to the previous chunk w
 df_no_dupes <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy Input Data/qryHLE_Basic_Data_Query_No_Dups_06a_Final_with_Min_RL_NDs_CoSB_DummyInputs.xlsx") %>%
     mutate(`Date Sampled`=as.Date(`Date Sampled`),
            SigFigResult= as.numeric(gsub(",","",SigFigResult)),
@@ -114,7 +119,9 @@ df_no_dupes <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy
                          levels = c(0, 1),
                          labels = c("Non-Detect", "Detect"),),
            Loc=str_replace(string=Loc, pattern= "FCCL-","")
-           ) 
+           ) %>%
+  filter(`Date Sampled` >= start_date )
+  
 
 df_GWLs <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy Input Data/tblJDW_Groundwater_GW_Levels_CoSB_DummyInputs.xlsx")
 ```
@@ -122,16 +129,19 @@ df_GWLs <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy Inp
 ### Filter by qryTSP
 
 ```{r filter}
-qryTSP_list_taj <- qryTSP_list %>%
-  filter(Site =="Foxen Canyon Closed Landfill")
 
-df_no_dupes <- left_join(qryTSP_list_taj, df_no_dupes, by ="Analyte")  #Use qry parameter to filter data
+qryTSP_list_fox <- qryTSP_list %>%
+  filter(Site ==Site_variable)
 
-missing_Area <- df_no_dupes %>%
-  filter(is.na(Area))
+
+df_no_dupes <- left_join(qryTSP_list_fox, df_no_dupes, by =c("Site"="Area","Analyte"))  #Use qry parameter to filter data
+
+missing_Site <- df_no_dupes %>%
+  filter(!is.na(`Date Sampled`))
+  
 
 df_no_dupes <- df_no_dupes %>%
-  filter(!is.na(Area))
+  filter(!is.na(`Date Sampled`))
   
   
 df_noDup_list <-df_no_dupes %>%
@@ -164,6 +174,8 @@ rotatedAxisElementText = function(angle,position='x'){
   element_text(angle=angle,vjust=vjust,hjust=hjust)
 }
 
+roundUp <- function(x) 10^ceiling(log10(x))
+roundDown <- function(x) 10^floor(log10(x))
 
 #Outsourced script to make axis auto-breaks for log scale
 prettyLogs <- function(x){
@@ -263,13 +275,14 @@ logo_file
 
 ### Combine template, plot, and text annotations
 
-```{r add plot layers and create final plot}
-# date_x_min = min(df_no_dupes$`Date Sampled`) #Min date for axis
-date_x_min = as.Date("2005-01-01")
+```{r add plot layers and create final plot, fig.width=11, fig.height=8.5}
+date_x_min = min(df_no_dupes$`Date Sampled`) #Min date for axis
+# date_x_min = as.Date("2005-01-01") 
 date_x_max = max(df_no_dupes$`Date Sampled`) #Max date for axis
 
 scaleFUN <- function(x) sprintf("%.1f", x)
 # Annotating the Site, Figure number, name of analyte, and y-axis label from qrytable
+
 plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
   draw_plot(image_gg) +
   annotate("text", x=.65, y=.225, label = paste0("Time-Series Plot for ", unique(.$Plot), " in Groundwater"),  size= 3, color ="black", hjust = 0,
@@ -282,6 +295,7 @@ plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
   annotate("text", x=0.0475, y=0.085, label = figure_file_path, size= 1.5, color ="black",angle=90, hjust = 0) +
     draw_plot(ggplot(data=.x, aes(x=`Date Sampled`, y=SigFigResult, group=Loc)) +
                 ylab(label = unique(.$Y_Label))+
+                # ylim(0.9*roundDown(.$SigFigResult),1.1*roundUp(.$SigFigResult))+
                 # scale_y_continuous( labels = scaleFUN)+
                  scale_y_log10(labels = fancyNumbers,
                                breaks = prettyLogs)+
@@ -301,6 +315,7 @@ plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
 
 # Print one plot for us
 plots_list$`Dissolved Oxygen` #this one seems to have y-axis boundaries that are too small
+
 plots_list$`Benzene`
 
 
