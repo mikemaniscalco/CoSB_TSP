@@ -230,7 +230,7 @@ theme_set(
     panel.border = element_rect(colour = "black", fill=NA, size=1),
     panel.grid.major = element_line(linetype = "blank"), 
     panel.grid.minor = element_line(linetype = "blank"), 
-# panel.grid.major.y = element_line(color = "gray70"),
+    panel.grid.major.y = element_line(color = "gray70"),
 # panel.border = element_rect(color = "grey5", fill = NA),
     plot.margin = unit(c(0, 5.5, 0, 5.5), "pt"),
     axis.title.y = element_text(margin = margin(r=10), face = "bold", size = 12, angle = 90),
@@ -264,16 +264,17 @@ logo_file
 ### Combine template, plot, and text annotations
 
 ```{r add plot layers and create final plot}
-date_x_min = min(df_no_dupes$`Date Sampled`) #Min date for axis
+# date_x_min = min(df_no_dupes$`Date Sampled`) #Min date for axis
+date_x_min = as.Date("2005-01-01")
 date_x_max = max(df_no_dupes$`Date Sampled`) #Max date for axis
 
 scaleFUN <- function(x) sprintf("%.1f", x)
 # Annotating the Site, Figure number, name of analyte, and y-axis label from qrytable
 plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
   draw_plot(image_gg) +
-  annotate("text", x=.65, y=.205, label = unique(.$Site), size= 3, color ="black", hjust = 0) +
   annotate("text", x=.65, y=.225, label = paste("Time-Series Plot for ", unique(.$Plot)),  size= 3, color ="black", hjust = 0,
            fontface = "bold") +
+  annotate("text", x=.65, y=.205, label = unique(.$Site), size= 3, color ="black", hjust = 0) +
   annotate("text", x=.89, y=.175, label = "Figure", size= 4, color ="black", hjust = 0,  vjust = 1)+
   annotate("text", x=.89, y=.13, label = stringr::str_wrap(unique(.$FigureNumber), 6), size= 4, color ="black", hjust = 0,  vjust = 1)+
   annotate("text", x=.765, y=.0855, label = figure_date, size= 3, color ="black", hjust = 0) +
