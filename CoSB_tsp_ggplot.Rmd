@@ -64,6 +64,7 @@ library(ggh4x) #THIS PACKAGE IS AWESOME - ggplot2 hacks!
 figure_office <- "Santa Barbara"
 figure_date <- "December 2022"
 figure_file_path <- "C:/Users/Michael.Maniscalco/OneDrive - Geosyntec/Documents"
+database_path <- 
 ```
 
 ### Load qryTSPPlotList 
@@ -107,6 +108,7 @@ rm(con, connect_to_access_dbi)
 ### Load data
 
 ```{r data}
+# This could probably be bumped to the previous chunk w
 df_no_dupes <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy Input Data/qryHLE_Basic_Data_Query_No_Dups_06a_Final_with_Min_RL_NDs_CoSB_DummyInputs.xlsx") %>%
     mutate(`Date Sampled`=as.Date(`Date Sampled`),
            SigFigResult= as.numeric(gsub(",","",SigFigResult)),
