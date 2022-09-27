@@ -187,6 +187,8 @@ plot_inset
 ### Save plot
 
 ```{r ggsave}
+template_plots_30 <- template_plots[2:5]
+
 ggsave(filename = "CoSB_tsp_ggplot_concept.pdf", 
        plot = plot_inset,
        width = 11, 
