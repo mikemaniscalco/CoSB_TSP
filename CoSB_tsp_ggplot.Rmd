@@ -260,8 +260,8 @@ scaleFUN <- function(x) sprintf("%.1f", x)
 # Annotating the Site, Figure number, name of analyte, and y-axis label from qrytable
 plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
   draw_plot(image_gg) +
-  annotate("text", x=.65, y=.225, label = unique(.$Site), size= 3, color ="black", hjust = 0) +
-  annotate("text", x=.65, y=.205, label = paste("Time-Series Plot for ", unique(.$Plot)),  size= 3, color ="black", hjust = 0,
+  annotate("text", x=.65, y=.205, label = unique(.$Site), size= 3, color ="black", hjust = 0) +
+  annotate("text", x=.65, y=.225, label = paste("Time-Series Plot for ", unique(.$Plot)),  size= 3, color ="black", hjust = 0,
            fontface = "bold") +
   annotate("text", x=.89, y=.175, label = "Figure", size= 4, color ="black", hjust = 0,  vjust = 1)+
   annotate("text", x=.89, y=.13, label = stringr::str_wrap(unique(.$FigureNumber), 6), size= 4, color ="black", hjust = 0,  vjust = 1)+
