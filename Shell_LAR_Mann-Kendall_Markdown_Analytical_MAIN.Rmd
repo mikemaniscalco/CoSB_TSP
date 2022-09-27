@@ -67,6 +67,7 @@ colnames(df_all_results) <- c("Location","Analyte","N","conc_trend")
 # 2. Formatting functions for time series plot
 ################################################
 
+
 #Outsourced script to make axis auto-breaks for log scale
 prettyLogs <- function(x){
                           pretty_range <- range(x[x > 0])
