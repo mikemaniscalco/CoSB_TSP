@@ -57,25 +57,28 @@ library(ggh4x) #THIS PACKAGE IS AWESOME - ggplot2 hacks!
 ```
 
 
-### Set Variables
+### Set variables
 
 ```{r}
+# Sets static variables specific to a round of TSP plots
 figure_office <- "Santa Barbara"
 figure_date <- "December 2022"
 figure_file_path <- "C:/Users/Michael.Maniscalco/OneDrive - Geosyntec/Documents"
-
 ```
 
 ### Load qryTSPPlotList 
+* This list contains information about Figure numbers, which analytes should be plotted for a gived Site,....
 
 ```{r qry load}
+# Direct file path is used to read a MS access database
 connect_to_access_dbi <- function(db_file_path)  {
   require(DBI)
-  # make sure that the file exists before attempting to connect
+  # Makes sure that the file exists before attempting to connect
    if (!file.exists(db_file_path)) {
      stop("DB file does not exist at ", db_file_path)
    }
-  # Assemble connection strings
+  
+  # String is created to connect to Microsoft access database
   dbq_string <- paste0("DBQ=", db_file_path)
   driver_string <- "Driver={Microsoft Access Driver (*.mdb, *.accdb)};"
   db_connect_string <- paste0(driver_string, dbq_string)
@@ -85,13 +88,19 @@ connect_to_access_dbi <- function(db_file_path)  {
   return(myconn)
 }
 
+# Saves database connection as as an object
+con <- connect_to_access_dbi("P:/GIS/County of Santa Barbara RRWMD/Database/Plots/Graph_AllSites_County_of_SB.accdb")
 
-con<- connect_to_access_dbi("P:/GIS/County of Santa Barbara RRWMD/Database/Plots/Graph_AllSites_County_of_SB.accdb")
+# Looks for the query [or table] name in database, converts it to a datafrane and saves it as an object
+# Tbl can also be used to run tidyverse commands and translate it into SQL
 
 qryTSP_list <- tbl(con, "qryTSPPlotList") %>%
   data.frame()
+
+# Disconnects from database now that we are done with it
 dbDisconnect(con)
 
+# Removes objects not used for remainder of script
 rm(con, connect_to_access_dbi)
 ```
 
@@ -287,7 +296,7 @@ plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
               x = 0.0725, y = 0.25, width = 0.88, height = 0.625)))
 
 # Print one plot for us
-plots_list$`Dissolved Oxygen`
+plots_list$`Dissolved Oxygen` #this one seems to have y-axis boundaries that are too small
 plots_list$`1,2-Dichlorobenzene`
 
 ```
