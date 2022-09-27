@@ -81,6 +81,38 @@ attributes(df_no_dupes$Detect)
 df_GWLs <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy Input Data/tblJDW_Groundwater_GW_Levels_CoSB_DummyInputs.xlsx")
 ```
 
+### Load qryTSPPlotList 
+
+```{r qry load}
+connect_to_access_dbi <- function(db_file_path)  {
+  require(DBI)
+  # make sure that the file exists before attempting to connect
+   if (!file.exists(db_file_path)) {
+     stop("DB file does not exist at ", db_file_path)
+   }
+  # Assemble connection strings
+  dbq_string <- paste0("DBQ=", db_file_path)
+  driver_string <- "Driver={Microsoft Access Driver (*.mdb, *.accdb)};"
+  db_connect_string <- paste0(driver_string, dbq_string)
+
+  myconn <- dbConnect(odbc::odbc(),
+                      .connection_string = db_connect_string)
+  return(myconn)
+}
+
+
+con<- connect_to_access_dbi("P:/GIS/County of Santa Barbara RRWMD/Database/Plots/Graph_AllSites_County_of_SB.accdb")
+
+qryTSP_list<- tbl(con, "qryTSPPlotList") %>%
+  data.frame()
+dbDisconnect(con)
+```
+
+### Filter by qryTSP
+
+```{r filter}
+```
+
 ### Create pallette
 
 ```{r pallette}
