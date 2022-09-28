@@ -118,7 +118,7 @@ df_no_dupes <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy
            SigFigResult= as.numeric(gsub(",","",SigFigResult)),
            Detect=factor(Detect,
                          levels = c(0, 1),
-                         labels = c("Non-detect", "Detect"),),
+                         labels = c("Non-Detect", "Detect"),),
            Loc=str_replace(string=Loc, pattern= "FCCL-","")
            ) %>%
   filter(`Date Sampled` >= start_date )
@@ -130,8 +130,10 @@ df_GWLs <- read_excel("P:/!Users_Public/Broeckx-Smith/Excel TSP Revamp/Dummy Inp
 ### Filter by qryTSP
 
 ```{r filter}
+
 qryTSP_list_fox <- qryTSP_list %>%
   filter(Site ==Site_variable)
+
 
 df_no_dupes <- left_join(qryTSP_list_fox, df_no_dupes, by =c("Site"="Area","Analyte"))  #Use qry parameter to filter data
 
@@ -237,10 +239,11 @@ theme_set(
     panel.background = element_rect(fill='transparent'), #transparent panel bg
     plot.background = element_rect(fill='transparent', color=NA), #transparent plot bg
     panel.border = element_rect(colour = "black", fill=NA, size=1),
-    panel.grid.major = element_line(linetype = "blank"), 
+    # panel.grid.major = element_line(linetype = "blank"), 
     panel.grid.minor = element_line(linetype = "blank"), 
     panel.grid.major.y = element_line(color = "gray70"),
-# panel.border = element_rect(color = "grey5", fill = NA),
+    panel.grid.major.x = element_line(linetype = "blank"), 
+    # panel.border = element_rect(color = "grey5", fill = NA),
     plot.margin = unit(c(0, 5.5, 0, 5.5), "pt"),
     axis.title.y = element_text(margin = margin(r=10), face = "bold", size = 12, angle = 90),
     axis.title.x = element_blank(),
@@ -252,11 +255,12 @@ theme_set(
     text = element_text(family = "serif"),
     legend.title = element_blank(),
     legend.justification = "bottom",
-                      legend.key.size = unit(0.5, "cm"),
-                      legend.spacing.y = unit(0.05, 'cm'),
-                      legend.text = element_text(face = "bold", size = 8),
-                      # legend.box.margin=margin(0,0,0,30),
-                      ggh4x.axis.ticks.length.minor = rel(0.5)
+    legend.key.size = unit(0.5, "cm"),
+    legend.spacing.y = unit(0.05, 'cm'),
+    legend.text = element_text(face = "bold", size = 8),
+    # legend.box.margin=margin(0,0,0,30),
+    ggh4x.axis.ticks.length.minor = rel(0.5),
+    legend.key=element_blank()
 )
 )
 
@@ -283,7 +287,7 @@ scaleFUN <- function(x) sprintf("%.1f", x)
 rm(plots_list)
 plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
   draw_plot(image_gg) +
-  annotate("text", x=.65, y=.225, label = paste("Time-Series Plot for ", unique(.$Plot)),  size= 3, color ="black", hjust = 0,
+  annotate("text", x=.65, y=.225, label = paste0("Time-Series Plot for ", unique(.$Plot), " in Groundwater"),  size= 3, color ="black", hjust = 0,
            fontface = "bold") +
   annotate("text", x=.65, y=.205, label = unique(.$Site), size= 3, color ="black", hjust = 0) +
   annotate("text", x=.89, y=.175, label = "Figure", size= 4, color ="black", hjust = 0,  vjust = 1)+
@@ -293,16 +297,17 @@ plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
   annotate("text", x=0.0475, y=0.085, label = figure_file_path, size= 1.5, color ="black",angle=90, hjust = 0) +
     draw_plot(ggplot(data=.x, aes(x=`Date Sampled`, y=SigFigResult, group=Loc)) +
                 ylab(label = unique(.$Y_Label))+
-                # ylim(0.9*roundDown(.$SigFigResult),1.1*roundUp(.$SigFigResult))+
-                # scale_y_continuous( labels = scaleFUN)+
-                scale_y_continuous(trans = 'log10', 
+# <<<<<<< HEAD
+                scale_y_continuous(trans = 'log10',
                                    # guide = "axis_logticks",
                                    # breaks=prettyLogs,
                                    breaks = scales::trans_breaks("log10", function(x) 10^x),
                                    labels = scales::trans_format("log10", scales::math_format(10^.x)),
-                                   limits= c(roundDown(min(.$SigFigResult)), roundUp(max(.$SigFigResult)))
-                                   )+
-                # annotation_logticks(sides = "l", scaled = T, long=unit(5,"mm"))+
+                                   limits= c(roundDown(min(.$SigFigResult)), roundUp(max(.$SigFigResult))))+
+# =======
+                 # scale_y_log10(labels = fancyNumbers,
+                 #               breaks = prettyLogs)+
+                 # annotation_logticks(sides = "l", scaled = T, long=unit(5,"mm"))+
                 scale_x_date(date_labels = "%b %Y",
                              limits = c(date_x_min,date_x_max),
                              date_minor_breaks = "1 year",
@@ -314,8 +319,40 @@ plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
                 scale_shape_manual(values=c(1,16),drop = FALSE),
               x = 0.0725, y = 0.275, width = 0.88, height = 0.615)))
 
+
 # Print one plot for us
 plots_list$`Dissolved Oxygen` #this one seems to have y-axis boundaries that are too small
+
+plots_list$`Benzene`
+
+
+plot_preview <- plots_list$`Benzene`
+
+
+
+##### SSBS Testing ####
+
+# test_data <- df_no_dupes %>% filter(Analyte == "Benzene")
+# 
+# plot_test <-ggplot(data= test_data, aes(x=`Date Sampled`, y=SigFigResult, group=Loc)) +
+#                 ylab(label = unique(test_data$Y_Label))+
+#                 # scale_y_continuous( labels = scaleFUN)+
+#                 scale_y_log10(labels = fancyNumbers,
+#                                breaks = prettyLogs)+
+#                 #scale_y_continuous(trans = 'log10', breaks = prettyLogs,labels = scaleFUN)+
+#                 annotation_logticks(sides = "l", scaled = T, long=unit(5,"mm"))+
+#                 scale_x_date(date_labels = "%b %Y",
+#                              limits = c(date_x_min,date_x_max),
+#                              date_minor_breaks = "1 year",
+#                              guide = "axis_minor") +
+#                 geom_line(aes(color=Loc, linetype=Loc),
+#                           size=0.75)+
+#                 geom_point(aes(color=Loc, shape= Detect),
+#                            size=3)+
+#                 scale_shape_manual(values=c(1,16),drop = FALSE) +
+#                 xlab(element_blank())
+##################################
+
 
 ```
 
