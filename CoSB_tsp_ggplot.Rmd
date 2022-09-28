@@ -50,6 +50,7 @@ library(grid)
 library(readxl)
 library(ggtext)
 library(egg)
+library(scales)
 # library(Kendall)
 library(kableExtra)
 # library(tinytex)
@@ -242,6 +243,7 @@ theme_set(
 # panel.border = element_rect(color = "grey5", fill = NA),
     plot.margin = unit(c(0, 5.5, 0, 5.5), "pt"),
     axis.title.y = element_text(margin = margin(r=10), face = "bold", size = 12, angle = 90),
+    axis.title.x = element_blank(),
     axis.title.y.right = element_text(vjust=2),
     axis.text.y = element_text(face = "bold",  size = 9),
     axis.text.x = element_text(margin = margin(t=10), face = "bold",  size = 10),
@@ -254,7 +256,7 @@ theme_set(
                       legend.spacing.y = unit(0.05, 'cm'),
                       legend.text = element_text(face = "bold", size = 8),
                       # legend.box.margin=margin(0,0,0,30),
-                        ggh4x.axis.ticks.length.minor = rel(0.5)
+                      ggh4x.axis.ticks.length.minor = rel(0.5)
 )
 )
 
@@ -278,7 +280,7 @@ date_x_max = max(df_no_dupes$`Date Sampled`) #Max date for axis
 
 scaleFUN <- function(x) sprintf("%.1f", x)
 # Annotating the Site, Figure number, name of analyte, and y-axis label from qrytable
-
+rm(plots_list)
 plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
   draw_plot(image_gg) +
   annotate("text", x=.65, y=.225, label = paste("Time-Series Plot for ", unique(.$Plot)),  size= 3, color ="black", hjust = 0,
@@ -293,11 +295,14 @@ plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
                 ylab(label = unique(.$Y_Label))+
                 # ylim(0.9*roundDown(.$SigFigResult),1.1*roundUp(.$SigFigResult))+
                 # scale_y_continuous( labels = scaleFUN)+
-                # scale_y_log10(labels = fancyNumbers,
-                #               breaks = prettyLogs)+
-                scale_y_continuous(trans = 'log10', breaks = prettyLogs,labels = scaleFUN )+
-                                   # limits=c(0.9*roundDown(.$SigFigResult), 1.1*roundUp(.$SigFigResult)))+
-                annotation_logticks(sides = "l", scaled = T, long=unit(5,"mm"))+
+                scale_y_continuous(trans = 'log10', 
+                                   # guide = "axis_logticks",
+                                   # breaks=prettyLogs,
+                                   breaks = scales::trans_breaks("log10", function(x) 10^x),
+                                   labels = scales::trans_format("log10", scales::math_format(10^.x)),
+                                   limits= c(roundDown(min(.$SigFigResult)), roundUp(max(.$SigFigResult)))
+                                   )+
+                # annotation_logticks(sides = "l", scaled = T, long=unit(5,"mm"))+
                 scale_x_date(date_labels = "%b %Y",
                              limits = c(date_x_min,date_x_max),
                              date_minor_breaks = "1 year",
@@ -307,7 +312,7 @@ plots_list <-   imap(.x=df_noDup_list, .f = ~(ggdraw()+
                 geom_point(aes(color=Loc, shape= Detect),
                            size=3)+
                 scale_shape_manual(values=c(1,16),drop = FALSE),
-              x = 0.0725, y = 0.25, width = 0.88, height = 0.625)))
+              x = 0.0725, y = 0.275, width = 0.88, height = 0.615)))
 
 # Print one plot for us
 plots_list$`Dissolved Oxygen` #this one seems to have y-axis boundaries that are too small
