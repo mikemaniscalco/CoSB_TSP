@@ -323,4 +323,6 @@ pdf("all_log.pdf",width = 11,
        height = 8.5)
 invisible(lapply(plots_list, print))
 dev.off()
+
 ```
+
